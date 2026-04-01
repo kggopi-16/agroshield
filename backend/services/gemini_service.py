@@ -28,18 +28,29 @@ Constraints:
 """
 
 def get_model():
-    # Reload environment variables to pick up changes in .env
-    load_dotenv(override=True)
+    # Only load from .env if not already set, or to support local development
+    # Remove override=True so that Render's dashboard variables take precedence
+    load_dotenv()
+    
     api_key = os.getenv("GEMINI_API_KEY")
     
+    # Debug info (will show in Render logs)
+    if not api_key:
+        print("DEBUG: GEMINI_API_KEY is not set in the environment.")
+    elif "YOUR_GEMINI_API_KEY_HERE" in api_key:
+        print("DEBUG: GEMINI_API_KEY is still using the placeholder value.")
+    else:
+        # Masked key for security in logs
+        masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "****"
+        print(f"DEBUG: Found GEMINI_API_KEY: {masked_key}")
+
     if not api_key or "YOUR_GEMINI_API_KEY_HERE" in api_key:
         return None
 
     try:
         genai.configure(api_key=api_key)
-        # Using 1.5-flash for high-speed responsiveness
         return genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_PROMPT
         )
     except Exception as e:
@@ -50,7 +61,7 @@ def chat(prompt: str):
     model = get_model()
     
     if model is None:
-        return "⚠️ Uzhavan AI is currently in offline mode. Please add your GEMINI_API_KEY to the .env file to enable the assistant."
+        return "⚠️ Uzhavan AI is currently in offline mode. Please ensure GEMINI_API_KEY is correctly set in the Render Dashboard (Environment Variables) and redeploy."
 
     try:
         response = model.generate_content(prompt)
@@ -58,4 +69,4 @@ def chat(prompt: str):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"❌ Gemini API Error: {str(e)}. Please check your API key and quota."
+        return f"❌ Gemini API Error: {str(e)}. Please check your API key and quota in the Google AI Studio console."
