@@ -1,98 +1,120 @@
 /*
- * AgroShield ESP8266 (NodeMCU) Firmware
- * Sensors: DHT11 (Temp/Humidity) + Analog Soil Moisture
- * 
- * Instructions:
- * 1. Install "DHT sensor library" by Adafruit via Library Manager.
- * 2. Change SSID and PASSWORD.
- * 3. Change SERVER_URL to your Render URL or local IP.
+ * AgroShield ESP8266 FINAL VERSION (HTTPS + STABLE)
  */
 
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <DHT.h>
 
-// WiFi Credentials
+// ---------------- WIFI ----------------
 const char* ssid = "moto g84";
 const char* password = "12345678";
 
-// Server Configuration
-// For Local: "http://192.168sensor.1.XX:8000/api/"
-// For Render: "http://your-app.onrender.com/api/sensor" 
-// Note: Use http if not using SSL certificates on ESP, Render supports http redirect.
-// const char* serverUrl = "http://your-app.onrender.com/api/sensor";
-const char* serverUrl = "http://127.0.0.1:8000/api/sensor";
+// ---------------- SERVER ----------------
+// 🔥 Using HTTPS (FIXED 307 issue)
+const char* serverUrl = "https://agroshield-edhg.onrender.com/api/sensor";
 
-// Pin Configuration
-#define DHTPIN D2           // DHT11 Data Pin
-#define DHTTYPE DHT11       // DHT 11
-#define SOIL_PIN A0         // Analog Soil Moisture Pin
+// ---------------- PINS ----------------
+#define DHTPIN D2
+#define DHTTYPE DHT11
+#define SOIL_PIN A0
 
 DHT dht(DHTPIN, DHTTYPE);
 
+// ---------------- TIMING ----------------
+unsigned long lastSend = 0;
+const long interval = 10000;  // 10 seconds
+
+// ---------------- SETUP ----------------
 void setup() {
   Serial.begin(115200);
   dht.begin();
-  
+
+  Serial.println("\n🚀 AgroShield Starting...");
+
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nConnected to WiFi");
+
+  Serial.println("\n✅ Connected!");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 }
 
+// ---------------- LOOP ----------------
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClient client;
-    HTTPClient http;
 
-    // Read Sensors
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-    int soilRaw = analogRead(SOIL_PIN);
-    
-    // Convert Soil Moisture to Percentage (0-100)
-    // 1024 is dry, ~200 is wet (adjust based on your sensor)
-    float m = map(soilRaw, 1024, 200, 0, 100);
-    if (m < 0) m = 0;
-    if (m > 100) m = 100;
+  if (millis() - lastSend >= interval) {
+    lastSend = millis();
 
-    if (isnan(h) || isnan(t)) {
-      Serial.println("Failed to read from DHT sensor!");
-      return;
-    }
+    if (WiFi.status() == WL_CONNECTED) {
 
-    // Prepare JSON Data
-    String jsonData = "{\"humidity\": " + String(h) + 
-                      ", \"temperature\": " + String(t) + 
-                      ", \"moisture\": " + String(m) + 
-                      ", \"ph\": 6.5}"; // pH is simulated or fixed for now
+      // -------- SENSOR --------
+      float h = dht.readHumidity();
+      float t = dht.readTemperature();
+      int soilRaw = analogRead(SOIL_PIN);
 
-    Serial.println("Sending data: " + jsonData);
+      float m = map(soilRaw, 1024, 200, 0, 100);
+      if (m < 0) m = 0;
+      if (m > 100) m = 100;
 
-    // Start HTTP Connection
-    http.begin(client, serverUrl);
-    http.addHeader("Content-Type", "application/json");
+      if (isnan(h) || isnan(t)) {
+        Serial.println("❌ DHT read failed!");
+        return;
+      }
 
-    int httpResponseCode = http.POST(jsonData);
+      // -------- JSON --------
+      String jsonData = "{";
+      jsonData += "\"humidity\":" + String(h) + ",";
+      jsonData += "\"temperature\":" + String(t) + ",";
+      jsonData += "\"moisture\":" + String(m) + ",";
+      jsonData += "\"ph\":6.5";
+      jsonData += "}";
 
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.println("HTTP Response code: " + String(httpResponseCode));
-      Serial.println(response);
+      Serial.println("\n📡 Sending:");
+      Serial.println(jsonData);
+
+      // -------- HTTPS REQUEST --------
+      WiFiClientSecure client;
+      client.setInsecure();   // 🔥 IMPORTANT (skip SSL verify)
+
+      HTTPClient http;
+      http.setTimeout(5000);
+
+      if (http.begin(client, serverUrl)) {
+
+        http.addHeader("Content-Type", "application/json");
+
+        int httpResponseCode = http.POST(jsonData);
+
+        if (httpResponseCode > 0) {
+          Serial.print("✅ Response: ");
+          Serial.println(httpResponseCode);
+
+          String response = http.getString();
+          Serial.println("Server: " + response);
+
+        } else {
+          Serial.print("❌ Error: ");
+          Serial.println(httpResponseCode);
+        }
+
+        http.end();
+
+      } else {
+        Serial.println("❌ HTTP begin failed!");
+      }
+
     } else {
-      Serial.print("Error code: ");
-      Serial.println(httpResponseCode);
+      Serial.println("⚠️ WiFi lost! Reconnecting...");
+      WiFi.begin(ssid, password);
     }
-
-    http.end();
   }
 
-  // Send data every 10 seconds
-  delay(10000);
+  yield(); // keep WiFi stable
 }
