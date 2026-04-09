@@ -50,7 +50,7 @@ def get_model():
     try:
         genai.configure(api_key=api_key)
         return genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_PROMPT
         )
     except Exception as e:
