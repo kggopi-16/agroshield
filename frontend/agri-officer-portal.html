@@ -1262,7 +1262,8 @@ const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 ws.onmessage = (e) => {
     try {
         const data = JSON.parse(e.data);
-        console.log("Live Sensor Update:", data);
+        console.log("--- 📡 LIVE SENSOR UPDATE ---");
+        console.table(data);
         
         const pulse = (id) => {
             const el = document.getElementById(id);
@@ -1271,6 +1272,7 @@ ws.onmessage = (e) => {
             setTimeout(() => el.parentElement.style.animation = "none", 500);
         };
 
+        // Update Soil Moisture
         if(data.moisture !== undefined) { 
             const val = parseFloat(data.moisture).toFixed(1);
             document.getElementById('smVal').innerText = val + "%";
@@ -1285,16 +1287,26 @@ ws.onmessage = (e) => {
                     liveMoistureChart.data.labels.shift();
                     liveMoistureChart.data.datasets[0].data.shift();
                 }
-                liveMoistureChart.update('none'); // No animation for performance
+                liveMoistureChart.update('none'); 
             }
         }
+
+        // Update Temperature (Both sensor card and weather widget)
         if(data.temperature !== undefined) { 
-            document.getElementById('stVal').innerText = parseFloat(data.temperature).toFixed(1) + "°C";
+            const tempVal = parseFloat(data.temperature).toFixed(1) + "°C";
+            document.getElementById('stVal').innerText = tempVal;
+            const wTemp = document.getElementById('wTemp');
+            if(wTemp) wTemp.innerText = tempVal;
             pulse('stVal');
         }
+
+        // Update pH (Both sensor card and dashboard stat)
         if(data.ph !== undefined) { 
             const ph = parseFloat(data.ph).toFixed(1);
             document.getElementById('phVal').innerText = ph;
+            const statPh = document.getElementById('stat-ph');
+            if(statPh) statPh.innerText = ph;
+
             const marker = document.getElementById('phMarker');
             if(marker) {
                 const left = (ph / 14) * 100;
@@ -1302,10 +1314,19 @@ ws.onmessage = (e) => {
             }
             pulse('phVal');
         }
+
+        // Update Humidity
         if(data.humidity !== undefined) {
              const hEl = document.getElementById('humidityVal');
              if(hEl) hEl.innerText = parseFloat(data.humidity).toFixed(1) + "%";
         }
+
+        // Optional/Future: Nitrogen, Phosphorus, Potassium, EC
+        if(data.n !== undefined && document.getElementById('nVal')) document.getElementById('nVal').innerText = data.n;
+        if(data.p !== undefined && document.getElementById('pVal')) document.getElementById('pVal').innerText = data.p;
+        if(data.k !== undefined && document.getElementById('kVal')) document.getElementById('kVal').innerText = data.k;
+        if(data.ec !== undefined && document.getElementById('ecVal')) document.getElementById('ecVal').innerText = data.ec;
+
     } catch(err) { console.error("WS Parse Error", err); }
 };
 
