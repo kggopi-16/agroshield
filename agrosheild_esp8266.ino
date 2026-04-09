@@ -4,7 +4,7 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClient.h> 
+#include <WiFiClientSecure.h> 
 #include <DHT.h>
 
 // ---------------- WIFI ----------------
@@ -12,8 +12,8 @@ const char* ssid = "moto";
 const char* password = "124567890";
 
 // ---------------- SERVER ----------------
-// 🔥 Updated with local server IP and port
-const char* serverUrl = "http://10.204.255.195:8003/api/sensor"; 
+// 🔥 Production URL (Render)
+const char* serverUrl = "https://agroshield-edhg.onrender.com/api/sensor"; 
 
 // ---------------- PINS ----------------
 #define DHTPIN D2
@@ -64,7 +64,8 @@ void loop() {
                       ",\"moisture\":" + String(m) + 
                       ",\"ph\":6.5}";
 
-    WiFiClient client;
+    WiFiClientSecure client;
+    client.setInsecure(); // 🔥 Required for HTTPS (Render)
     HTTPClient http;
     http.setTimeout(5000); 
 
